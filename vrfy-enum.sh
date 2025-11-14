@@ -1,20 +1,35 @@
 #!/bin/bash
 
-# This enumerates smpt users against a wordlist.
-
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <IP_SMTP> <wordlist>"
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <IP_SMTP> <wordlist> [timeout] [delay]"
+    echo "  timeout = Netcat timeout threashold (default: 6s)"
+    echo "  delay   = request delay (default: 0.2s)"
     exit 1
 fi
 
 SERVER="$1"
 WORDLIST="$2"
+TIMEOUT="${3:-6}"    # default timeoutt: 6 seconds
+DELAY="${4:-0.2}"    # default delayt: 0.2 seconds
+
+# ANSI colors
+GREEN="\e[32m"
+RED="\e[31m"
+YELLOW="\e[33m"
+RESET="\e[0m"
 
 while IFS= read -r user; do
-    echo "VRFY $user" | nc -w 3 "$SERVER" 25 | grep -E "250|252" >/dev/null
-    if [ $? -eq 0 ]; then
-        echo "[+] User found: $user"
+    
+    RESPONSE=$(echo "VRFY $user" | nc -w "$TIMEOUT" "$SERVER" 25 2>/dev/null)
+
+    if echo "$RESPONSE" | grep -E "250|252" >/dev/null; then
+        echo -e "${GREEN}[+] User found: $user${RESET}"
+    elif echo "$RESPONSE" | grep -q "550"; then
+        echo -e "${RED}[-] $user not found${RESET}"
     else
-        echo "[-] $user is not a valid user"
+        echo -e "${YELLOW}[?] No response or timeout for: $user${RESET}"
     fi
+
+    sleep "$DELAY"
+
 done < "$WORDLIST"
